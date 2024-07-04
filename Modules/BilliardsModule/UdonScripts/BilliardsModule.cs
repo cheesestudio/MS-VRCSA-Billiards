@@ -1249,7 +1249,7 @@ public class BilliardsModule : UdonSharpBehaviour
                     repoMaxX = k_pR.x;
                     break;
                 case 3://snooker D
-                    repoMaxX = -k_TABLE_WIDTH + K_BAULK_LINE;
+                    repoMaxX = K_BAULK_LINE;
                     break;
             }
             setFoulPickupEnabled(true);
@@ -1591,6 +1591,7 @@ public class BilliardsModule : UdonSharpBehaviour
                 foulCondition,
                 deferLossCondition
             ;
+            bool snookerDraw = false;
 
             if (is8Ball)
             {
@@ -1660,7 +1661,7 @@ public class BilliardsModule : UdonSharpBehaviour
             {
                 if (isScratch)
                 {
-                    ballsP[0] = new Vector3(-k_TABLE_WIDTH + K_BAULK_LINE - k_SEMICIRCLERADIUS * .5f, 0f, 0f);
+                    ballsP[0] = new Vector3(K_BAULK_LINE - k_SEMICIRCLERADIUS * .5f, 0f, 0f);
                     moveBallInDirUntilNotTouching(0, Vector3.back * k_BALL_RADIUS * .051f);
                 }
                 isOpponentSink = false;
@@ -1824,14 +1825,26 @@ public class BilliardsModule : UdonSharpBehaviour
                 else
                 { colorTurnLocal = false; }
 
-                //win = all balls pocketed and have more points than opponent
-                bool myTeamWinning = fbScoresLocal[teamIdLocal] > fbScoresLocal[1 - teamIdLocal];
-                winCondition = myTeamWinning && allBallsPocketed;
-                if (winCondition) { foulCondition = false; }
-                deferLossCondition = allBallsPocketed && !myTeamWinning;
-                /*                 _LogInfo("6RED: " + Convert.ToString((ballsPocketedLocal & 0x1FFEu), 2));
-                                _LogInfo("6RED: " + Convert.ToString(0x1FFEu, 2)); */
-
+                if (fbScoresLocal[teamIdLocal] == fbScoresLocal[1 - teamIdLocal] && allBallsPocketed)
+                {
+                    // tie rules, cue and black are re-spotted, and a random player gets to go, cue ball in hand, ->onLocalTurnTie()
+                    winCondition = false;
+                    deferLossCondition = false;
+                    foulCondition = false;
+                    sixRedReturnColoredBalls(11);
+                    ballsP[0] = new Vector3(K_BAULK_LINE - k_SEMICIRCLERADIUS * .5f, 0f, 0f);
+                    snookerDraw = true;
+                }
+                else
+                {
+                    // win = all balls pocketed and have more points than opponent
+                    bool myTeamWinning = fbScoresLocal[teamIdLocal] > fbScoresLocal[1 - teamIdLocal];
+                    winCondition = myTeamWinning && allBallsPocketed;
+                    if (winCondition) { foulCondition = false; }
+                    deferLossCondition = allBallsPocketed && !myTeamWinning;
+                    /*                 _LogInfo("6RED: " + Convert.ToString((ballsPocketedLocal & 0x1FFEu), 2));
+                                    _LogInfo("6RED: " + Convert.ToString(0x1FFEu, 2)); */
+                }
             }
 
             networkingManager._OnSimulationEnded(ballsP, ballsPocketedLocal, fbScoresLocal, colorTurnLocal);
@@ -1858,6 +1871,11 @@ public class BilliardsModule : UdonSharpBehaviour
             {
                 // Foul
                 onLocalTurnFoul(isScratch, nextTurnBlocked);
+            }
+            else if (snookerDraw)
+            {
+                // Snooker Draw
+                onLocalTurnTie();
             }
             else if (isObjectiveSink && !isOpponentSink)
             {
@@ -1958,7 +1976,7 @@ public class BilliardsModule : UdonSharpBehaviour
     {
         float k_BALL_PL_X = k_BALL_RADIUS; // break placement X
         float k_BALL_PL_Y = Mathf.Sin(60 * Mathf.Deg2Rad) * k_BALL_DIAMETRE; // break placement Y
-        float quarterTable = (k_TABLE_WIDTH - k_CUSHION_RADIUS) / 2;
+        float quarterTable = k_TABLE_WIDTH / 2;
         for (int i = 0; i < 5; i++)
         {
             initialPositions[i] = new Vector3[16];
@@ -2000,9 +2018,9 @@ public class BilliardsModule : UdonSharpBehaviour
                 {
                     initialPositions[1][break_order_9ball[k++]] = new Vector3
                     (
-                       quarterTable + i * k_BALL_PL_Y + UnityEngine.Random.Range(-k_RANDOMIZE_F, k_RANDOMIZE_F),
+                       quarterTable - (k_BALL_PL_Y * 2) + i * k_BALL_PL_Y /* + UnityEngine.Random.Range(-k_RANDOMIZE_F, k_RANDOMIZE_F) */,
                        0.0f,
-                       (-rown + j * 2) * k_BALL_PL_X + UnityEngine.Random.Range(-k_RANDOMIZE_F, k_RANDOMIZE_F)
+                       (-rown + j * 2) * k_BALL_PL_X /* + UnityEngine.Random.Range(-k_RANDOMIZE_F, k_RANDOMIZE_F) */
                     );
                 }
             }
@@ -2011,10 +2029,10 @@ public class BilliardsModule : UdonSharpBehaviour
         {
             // Snooker
             initialBallsPocketed[4] = 0xE000u;
-            initialPositions[4][0] = new Vector3(-k_TABLE_WIDTH + K_BAULK_LINE - k_SEMICIRCLERADIUS * .5f, 0f, 0f);//whte, middle of the semicircle
+            initialPositions[4][0] = new Vector3(K_BAULK_LINE - k_SEMICIRCLERADIUS * .5f, 0f, 0f);//whte, middle of the semicircle
             initialPositions[4][1] = new Vector3//black
                     (
-                      k_TABLE_WIDTH - K_BLACK_SPOT,
+                       K_BLACK_SPOT,
                        0f,
                        0f
                     );
@@ -2026,19 +2044,19 @@ public class BilliardsModule : UdonSharpBehaviour
                     );
             initialPositions[4][2] = new Vector3//yellow
                     (
-                       -k_TABLE_WIDTH + K_BAULK_LINE,
+                       K_BAULK_LINE,
                        0f,
                        -k_SEMICIRCLERADIUS
                     );
             initialPositions[4][7] = new Vector3//green
                     (
-                       -k_TABLE_WIDTH + K_BAULK_LINE,
+                       K_BAULK_LINE,
                        0f,
                        k_SEMICIRCLERADIUS
                     );
             initialPositions[4][8] = new Vector3//brown
                     (
-                       -k_TABLE_WIDTH + K_BAULK_LINE,
+                       K_BAULK_LINE,
                        0f,
                        0f
                     );
@@ -2102,8 +2120,8 @@ public class BilliardsModule : UdonSharpBehaviour
         tableModelLocal = newTableModel;
 
         ModelData data = tableModels[tableModelLocal];
-        k_TABLE_WIDTH = data.tableWidth;
-        k_TABLE_HEIGHT = data.tableHeight;
+        k_TABLE_WIDTH = data.tableWidth * .5f;
+        k_TABLE_HEIGHT = data.tableHeight * .5f;
         k_CUSHION_RADIUS = data.cushionRadius;
         k_POCKET_WIDTH_CORNER = data.pocketWidthCorner;
         k_POCKET_HEIGHT_CORNER = data.pocketHeightCorner;
@@ -2113,17 +2131,17 @@ public class BilliardsModule : UdonSharpBehaviour
         k_INNER_RADIUS_SIDE = data.pocketInnerRadiusSide;
         k_FACING_ANGLE_CORNER = data.facingAngleCorner;
         k_FACING_ANGLE_SIDE = data.facingAngleSide;
-        K_BAULK_LINE = data.baulkLine;
-        K_BLACK_SPOT = data.blackSpotFromR;
+        K_BAULK_LINE = -(k_TABLE_WIDTH - data.baulkLine);
+        K_BLACK_SPOT = k_TABLE_WIDTH - data.blackSpot;
         k_SEMICIRCLERADIUS = data.semiCircleRadius;
         k_BALL_DIAMETRE = data.bs_BallDiameter / 1000f;
-        k_BALL_RADIUS = k_BALL_DIAMETRE / 2f;
+        k_BALL_RADIUS = k_BALL_DIAMETRE * .5f;
         k_BALL_MASS = data.bs_BallMass;
         k_RAIL_HEIGHT_UPPER = data.railHeightUpper;
         k_RAIL_HEIGHT_LOWER = data.railHeightLower;
         k_RAIL_DEPTH_WIDTH = data.railDepthWidth;
         k_RAIL_DEPTH_HEIGHT = data.railDepthHeight;
-        k_SPOT_POSITION_X = data.rackTrianglePosition;
+        k_SPOT_POSITION_X = k_TABLE_WIDTH - data.pinkSpot;
         k_POCKET_RESTITUTION = data.bt_PocketRestitutionFactor;
         k_vE = data.cornerPocket;
         k_vF = data.sidePocket;
@@ -2317,6 +2335,13 @@ public class BilliardsModule : UdonSharpBehaviour
         _LogInfo($"onLocalTurnPass");
 
         networkingManager._OnTurnPass(teamIdLocal ^ 0x1u);
+    }
+
+    private void onLocalTurnTie()
+    {
+        _LogInfo($"onLocalTurnTie");
+
+        networkingManager._OnTurnTie();
     }
 
     private void onLocalTurnFoul(bool Scratch, bool objBlocked)
