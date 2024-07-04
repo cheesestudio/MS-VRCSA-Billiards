@@ -509,7 +509,7 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         // Check if simulation has settled
         if (!ballsMoving)
         {
-            if(table.isChinese8Ball)
+            if(table.isChinese8Ball && table.is8Ball)
             {
                 if (Time.time - pocketedTime > 6f)
                 {
@@ -2546,9 +2546,9 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         k_vC.z = k_pQ.z + heightZdifC;
         k_vZ.z = k_pQ.z + heightZdifZ;
         // k_pV.z = k_pQ.z + heightZdifV;
+
 #if HT8B_DRAW_REGIONS
         // for drawing lines only
-       
 
         k_pT = k_vX;
         k_pT.x -= k_CUSHION_RADIUS;
@@ -2752,7 +2752,7 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         newPosPR.z += k_BALL_RADIUS;
 
 #if HT8B_DRAW_REGIONS
-        // To Identify the points
+   // To Identify the points
         // side pocket
         // Color alpha1 = new Color(0, 0, 0, 1);// remove transparency
         // Debug.DrawRay(k_pN, Vector3.up, alpha1 + Color.red * .5f);
@@ -2778,7 +2778,6 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         // // center on end
         // Debug.DrawRay(k_pS, Vector3.up, Color.black);
         // Debug.DrawRay(k_vW, Vector3.up, alpha1 + Color.blue * .5f);
-
         Debug.DrawLine(k_vA, k_vB, Color.white);
         Debug.DrawLine(k_vD, k_vA, Color.white);
         Debug.DrawLine(k_vB, k_vY, Color.white);
@@ -2810,7 +2809,7 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         {
             if (newPos.x > newPos.z + k_MINOR_REGION_CONST) // Minor B
             {
-                if (newPos.z < k_vC.z)
+                if (newPos.z < k_vC.z) 
                 {
                     // Region H
 #if HT8B_DRAW_REGIONS
