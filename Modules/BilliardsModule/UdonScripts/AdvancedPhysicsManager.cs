@@ -1,12 +1,25 @@
+#define EIJIS_ISSUE_FIX
+#define EIJIS_MANY_BALLS
+#define EIJIS_SNOOKER15REDS
+#define EIJIS_PYRAMID
+#define EIJIS_CUEBALLSWAP
+
 // #define HT8B_DRAW_REGIONS
 using System;
 using UdonSharp;
 using UnityEngine;
+#if EIJIS_CUEBALLSWAP
+using VRC.SDKBase;
+#endif
 
 [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
 public class AdvancedPhysicsManager : UdonSharpBehaviour
 {
+#if EIJIS_MANY_BALLS
+    public string PHYSICSNAME = "<color=#FFD700>Advanced V0.5K (max32balls)</color>";
+#else
     public string PHYSICSNAME = "<color=#FFD700>Advanced V0.5K</color>";
+#endif
     [SerializeField] AudioClip[] hitSounds;
     [SerializeField] AudioClip[] bounceSounds;
     [SerializeField] AudioClip[] cushionSounds;
@@ -118,10 +131,17 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         balls_P = table.ballsP;
         balls_V = table.ballsV;
         balls_W = table.ballsW;
+#if EIJIS_MANY_BALLS
+        balls_inBounds = new bool[BilliardsModule.MAX_BALLS];
+        for (int i = 0; i < BilliardsModule.MAX_BALLS; i++) { balls_inBounds[i] = true; }
+        balls_transitioningBounds = new bool[BilliardsModule.MAX_BALLS];
+        balls_inPocketBounds = new bool[BilliardsModule.MAX_BALLS];
+#else
         balls_inBounds = new bool[16];
         for (int i = 0; i < 16; i++) { balls_inBounds[i] = true; }
         balls_transitioningBounds = new bool[16];
         balls_inPocketBounds = new bool[16];
+#endif
     }
 
     public void _FixedTick()
@@ -201,6 +221,29 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
             }
             else
             {
+#if EIJIS_CUEBALLSWAP
+                if (!ReferenceEquals(null, Networking.LocalPlayer) && Networking.LocalPlayer.IsUserInVR())
+                {
+                    if (table.isPyramid)
+                    {
+                        bool hit = false;
+                        for (int i = 1; i < balls_P.Length; i++)
+                        {
+                            if ((lpos2 - balls_P[i]).sqrMagnitude < k_BALL_RSQR)
+                            {
+                                table._TriggerOtherBallHit(i, false);
+                                hit = true;
+                                break;
+                            }
+                        }
+                        if (!hit)
+                        {
+                            table._TriggerOtherBallHit(-1, false);
+                        }
+                    }
+                }
+
+#endif
                 cue_vdir = this.transform.InverseTransformVector(cuetip.transform.forward);//new Vector2( cuetip.transform.forward.z, -cuetip.transform.forward.x ).normalized;
 
                 // Get where the cue will strike the ball
@@ -338,7 +381,11 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
 
         uint ball_bit = 0x1u;
         bool is4Ball = table.is4Ball;
+#if EIJIS_MANY_BALLS
+        for (int i = 0; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = 0; i < 16; i++)
+#endif
         {
             float moveTimeLeft = k_FIXED_TIME_STEP;
             int collidedBall = -1; // used to stop from colliding with the same ball twice in one step
@@ -462,16 +509,32 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         // Check if simulation has settled
         if (!ballsMoving)
         {
-            if (Time.time - pocketedTime > 1f)
+            if(table.isChinese8Ball)
             {
-                table._TriggerSimulationEnded(false);
-                return;
+                if (Time.time - pocketedTime > 6f)
+                {
+                    table._TriggerSimulationEnded(false);
+                    return;
+                }
             }
+            else
+            {
+                if (Time.time - pocketedTime > 1f)
+                {
+                    table._TriggerSimulationEnded(false);
+                    return;
+                }
+            }
+
         }
 
         if (is4Ball) return;
 
+#if EIJIS_SNOOKER15REDS
+        if (table.isSnooker)
+#else
         if (table.isSnooker6Red)
+#endif
         {
             if (!cueBallHasCollided && balls_P[0].y > 0)
             {
@@ -523,7 +586,11 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         // Loop balls look for collisions
         uint ball_bit = 0x1U;
 
+#if EIJIS_MANY_BALLS
+        for (int i = 0; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = 0; i < 16; i++)
+#endif
         {
             if (i == id
             || (ball_bit & sn_pocketed) != 0U
@@ -875,7 +942,11 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
                 float dot = Vector3.Dot(velocityDelta, normal);
                 g_ball_current.GetComponent<AudioSource>().PlayOneShot(hitSounds[id % 3], Mathf.Clamp01(dot));
 
+#if EIJIS_SNOOKER15REDS
+                if (table.isSnooker)
+#else
                 if (table_.isSnooker6Red)
+#endif
                 {
                     if (!cueBallHasCollided && id == 0 && balls_P[0].y > 0)
                     {
@@ -1643,7 +1714,11 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
     public void _ResetSimulationVariables()
     {
         jumpShotFlewOver = cueBallHasCollided = false;
+#if EIJIS_MANY_BALLS
+        for (int i = 0; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = 0; i < 16; i++)
+#endif
         {
             balls_inBounds[i] = true;
             balls_inPocketBounds[i] = false;
@@ -1672,8 +1747,16 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
                     k_RAIL_HEIGHT_LOWER = k_BALL_DIAMETRE * 0.6504065040650407f;
                     break;
                 case 4: // 6red
+#if EIJIS_PYRAMID
+                case BilliardsModule.GAMEMODE_PYRAMID: // Russian Pyramid
+#endif
                     k_RAIL_HEIGHT_LOWER = k_BALL_DIAMETRE * 0.7f;
                     break;
+#if EIJIS_ISSUE_FIX
+                default:
+                    k_RAIL_HEIGHT_LOWER = k_BALL_DIAMETRE * 0.635f;
+                    break;
+#endif
             }
         }
     }
@@ -1701,7 +1784,11 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
 
     private bool isCueBallTouching()
     {
+#if EIJIS_SNOOKER15REDS
+        if (table.is8Ball)
+#else
         if (table.is8Ball || table.isSnooker6Red)
+#endif
         {
             // Check all
             for (int i = 1; i < 16; i++)
@@ -1723,6 +1810,25 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
                 }
             }
         }
+#if EIJIS_SNOOKER15REDS
+        else if (table.isSnooker)
+        {
+            for (int i = 1; i < 16; i++)
+            {
+                if ((balls_P[0] - balls_P[i]).sqrMagnitude < k_BALL_DSQR)
+                {
+                    return true;
+                }
+            }
+            for (int i = 25; i < 31; i++)
+            {
+                if ((balls_P[0] - balls_P[i]).sqrMagnitude < k_BALL_DSQR)
+                {
+                    return true;
+                }
+            }
+        }
+#endif
         else // 4
         {
             if ((balls_P[0] - balls_P[9]).sqrMagnitude < k_BALL_DSQR)
@@ -2440,9 +2546,10 @@ public class AdvancedPhysicsManager : UdonSharpBehaviour
         k_vC.z = k_pQ.z + heightZdifC;
         k_vZ.z = k_pQ.z + heightZdifZ;
         // k_pV.z = k_pQ.z + heightZdifV;
-
 #if HT8B_DRAW_REGIONS
         // for drawing lines only
+       
+
         k_pT = k_vX;
         k_pT.x -= k_CUSHION_RADIUS;
 

@@ -1,4 +1,9 @@
-﻿using System;
+﻿#define EIJIS_ISSUE_FIX
+#define EIJIS_MANY_BALLS
+#define EIJIS_SNOOKER15REDS
+#define EIJIS_CUEBALLSWAP
+
+using System;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
@@ -7,7 +12,9 @@ using VRC.SDKBase;
 public class NetworkingManager : UdonSharpBehaviour
 {
     private const int MAX_PLAYERS = 4;
+#if !EIJIS_MANY_BALLS
     private const int MAX_BALLS = 16;
+#endif
 
     // the current packet id - this value should increment monotonically, once per network update
     [UdonSynced][NonSerialized] public int packetIdSynced;
@@ -16,7 +23,11 @@ public class NetworkingManager : UdonSharpBehaviour
     [UdonSynced][NonSerialized] public int[] playerIDsSynced = { -1, -1, -1, -1 };
 
     // ball positions
+#if EIJIS_MANY_BALLS
+    [UdonSynced][NonSerialized] public Vector3[] ballsPSynced = new Vector3[BilliardsModule.MAX_BALLS];
+#else
     [UdonSynced][NonSerialized] public Vector3[] ballsPSynced = new Vector3[MAX_BALLS];
+#endif
 
     // cue ball linear velocity
     [UdonSynced][NonSerialized] public Vector3 cueBallVSynced;
@@ -29,6 +40,9 @@ public class NetworkingManager : UdonSharpBehaviour
 
     // bitmask of pocketed balls
     [UdonSynced][NonSerialized] public uint ballsPocketedSynced;
+#if EIJIS_CUEBALLSWAP
+    [UdonSynced] [NonSerialized] public uint calledBallsSynced;
+#endif
 
     // the current team which is playing
     [UdonSynced][NonSerialized] public byte teamIdSynced;
@@ -272,7 +286,11 @@ public class NetworkingManager : UdonSharpBehaviour
 
     public void _OnSimulationEnded(Vector3[] ballsP, uint ballsPocketed, int[] fbScores, bool colorTurnLocal)
     {
+#if EIJIS_MANY_BALLS
+        Array.Copy(ballsP, ballsPSynced, BilliardsModule.MAX_BALLS);
+#else
         Array.Copy(ballsP, ballsPSynced, MAX_BALLS);
+#endif
         Array.Copy(fbScores, fourBallScoresSynced, 2);
         ballsPocketedSynced = ballsPocketed;
         colorTurnSynced = colorTurnLocal;
@@ -289,11 +307,30 @@ public class NetworkingManager : UdonSharpBehaviour
         foulStateSynced = 0;
         timerStartSynced = Networking.GetServerTimeInMilliseconds();
         swapFourBallCueBalls();
+#if EIJIS_SNOOKER15REDS
+        if (table.isSnooker)
+#else
         if (table.isSnooker6Red)
+#endif
         {
             fourBallCueBallSynced = 0;
             isTableOpenSynced = true;
         }
+#if EIJIS_CUEBALLSWAP
+        calledBallsSynced = 0;
+#endif
+
+        bufferMessages(false);
+    }
+    // Snooker only
+    public void _OnTurnTie()
+    {
+        stateIdSynced++;
+
+        teamIdSynced = (byte)UnityEngine.Random.Range(0, 2);
+        turnStateSynced = 2;
+        timerStartSynced = Networking.GetServerTimeInMilliseconds();
+        foulStateSynced = 3;
 
         bufferMessages(false);
     }
@@ -318,7 +355,11 @@ public class NetworkingManager : UdonSharpBehaviour
         teamIdSynced = (byte)teamId;
         turnStateSynced = 2;
         timerStartSynced = Networking.GetServerTimeInMilliseconds();
+#if EIJIS_SNOOKER15REDS
+        if (!table.isSnooker)
+#else
         if (!table.isSnooker6Red)
+#endif
         {
             foulStateSynced = 2;
         }
@@ -347,6 +388,9 @@ public class NetworkingManager : UdonSharpBehaviour
             }
         }
         swapFourBallCueBalls();
+#if EIJIS_CUEBALLSWAP
+        calledBallsSynced = 0;
+#endif
 
         bufferMessages(false);
     }
@@ -358,6 +402,9 @@ public class NetworkingManager : UdonSharpBehaviour
         turnStateSynced = 0;
         foulStateSynced = 0;
         timerStartSynced = Networking.GetServerTimeInMilliseconds();
+#if EIJIS_CUEBALLSWAP
+        calledBallsSynced = 0;
+#endif
 
         bufferMessages(false);
     }
@@ -392,7 +439,11 @@ public class NetworkingManager : UdonSharpBehaviour
     {
         stateIdSynced++;
 
+#if EIJIS_MANY_BALLS
+        Array.Copy(ballsP, ballsPSynced, BilliardsModule.MAX_BALLS);
+#else
         Array.Copy(ballsP, ballsPSynced, MAX_BALLS);
+#endif
 
         bufferMessages(false);
     }
@@ -429,7 +480,11 @@ public class NetworkingManager : UdonSharpBehaviour
         gameStateSynced = 2;
         ballsPocketedSynced = defaultBallsPocketed;
         //reposition state
+#if EIJIS_SNOOKER15REDS
+        if (table.isSnooker)
+#else
         if (table.isSnooker6Red)
+#endif
         {
             foulStateSynced = 3;
         }
@@ -445,8 +500,20 @@ public class NetworkingManager : UdonSharpBehaviour
         cueBallWSynced = Vector3.zero;
         previewWinningTeamSynced = 2;
         timerStartSynced = Networking.GetServerTimeInMilliseconds();
+#if EIJIS_MANY_BALLS
+        Array.Copy(ballPositions, ballsPSynced, BilliardsModule.MAX_BALLS);
+#else
         Array.Copy(ballPositions, ballsPSynced, MAX_BALLS);
+#endif
         Array.Clear(fourBallScoresSynced, 0, 2);
+#if EIJIS_CUEBALLSWAP
+        if (table.isPyramid)
+        {
+            isTableOpenSynced = false;
+            teamColorSynced = (byte)(teamIdSynced ^ 0x1u);
+            calledBallsSynced = 0;
+        }
+#endif
 
         bufferMessages(false);
     }
@@ -495,6 +562,30 @@ public class NetworkingManager : UdonSharpBehaviour
         bufferMessages(false);
     }
 
+#if EIJIS_CUEBALLSWAP
+    public void _OnCalledBallChanged(bool enabled, uint id)
+    {
+        uint ball_bit = 0x1u << (int)id;
+        uint calledBalls = calledBallsSynced;
+        if (enabled)
+        {
+            calledBalls = ball_bit;
+        }
+        else
+        {
+            calledBalls = 0;
+        }
+
+        calledBallsSynced = calledBalls;
+        
+        Vector3 temp = ballsPSynced[0];
+        ballsPSynced[0] = ballsPSynced[id];
+        ballsPSynced[id] = temp;
+
+        bufferMessages(false);
+    }
+    
+#endif
     public void _OnTeamsChanged(bool teamsEnabled)
     {
         teamsSynced = teamsEnabled;
@@ -621,7 +712,11 @@ public class NetworkingManager : UdonSharpBehaviour
     {
         stateIdSynced = stateIdLocal;
 
+#if EIJIS_MANY_BALLS
+        Array.Copy(newBallsP, ballsPSynced, BilliardsModule.MAX_BALLS);
+#else
         Array.Copy(newBallsP, ballsPSynced, MAX_BALLS);
+#endif
         ballsPocketedSynced = ballsPocketed;
         Array.Copy(newScores, fourBallScoresSynced, 2);
         gameModeSynced = (byte)gameMode;
@@ -677,7 +772,15 @@ public class NetworkingManager : UdonSharpBehaviour
         hasBufferedMessages = false;
         packetIdSynced++;
 
+#if EIJIS_ISSUE_FIX
+        VRCPlayerApi localPlayer = Networking.LocalPlayer; 
+        if (!ReferenceEquals(null, localPlayer))
+        {
+            Networking.SetOwner(localPlayer, this.gameObject);
+        }
+#else
         Networking.SetOwner(Networking.LocalPlayer, this.gameObject);
+#endif
         this.RequestSerialization();
         OnDeserialization();
     }

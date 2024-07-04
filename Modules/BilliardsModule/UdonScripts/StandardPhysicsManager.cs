@@ -1,4 +1,7 @@
-﻿// #define HT8B_DRAW_REGIONS
+﻿#define EIJIS_MANY_BALLS
+#define EIJIS_SNOOKER15REDS
+
+//#define HT8B_DRAW_REGIONS
 using System;
 using BestHTTP.SecureProtocol.Org.BouncyCastle.Crypto.Modes.Gcm;
 using UdonSharp;
@@ -302,7 +305,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
         // Run main simulation / inter-ball collision
 
         uint ball_bit = 0x1u;
+#if EIJIS_MANY_BALLS
+        for (int i = 1; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = 1; i < 16; i++)
+#endif
         {
             ball_bit <<= 1;
 
@@ -344,7 +351,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
         {
             ball_bit = 0x1U;
             // Run edge collision
+#if EIJIS_MANY_BALLS
+            for (int i = 0; i < BilliardsModule.MAX_BALLS; i++)
+#else
             for (int i = 0; i < 16; i++)
+#endif
             {
                 if (moved[i] && (ball_bit & sn_pocketed) == 0U && (i != 0 || canCueBallBounceOffCushion))
                 {
@@ -370,14 +381,22 @@ public class StandardPhysicsManager : UdonSharpBehaviour
 
         if (table.is4Ball) return;
 
+#if EIJIS_SNOOKER15REDS
+        if (table.isSnooker)
+#else
         if (table.isSnooker6Red)
+#endif
         {
             if (!cueBallHasCollided && balls_P[0].y > 0)
             {
                 ball_bit = 0x1U;
                 Vector2 cueBallPos = new Vector2(balls_P[0].x, balls_P[0].z);
                 bool flewOverThisFrame = false;
+#if EIJIS_MANY_BALLS
+                for (int i = 1; i < BilliardsModule.MAX_BALLS; i++)
+#else
                 for (int i = 1; i < 16; i++)
+#endif
                 {
                     ball_bit <<= 1;
                     if ((ball_bit & sn_pocketed) > 0U) continue; //skip checking pocketed balls
@@ -402,7 +421,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
         table._BeginPerf(table.PERF_PHYSICS_POCKET);
         if (!table.is4Ball)
         {
+#if EIJIS_MANY_BALLS
+            for (int i = 0; i < BilliardsModule.MAX_BALLS; i++)
+#else
             for (int i = 0; i < 16; i++)
+#endif
             {
                 if (moved[i] && (ball_bit & sn_pocketed) == 0U && (i != 0 || !outOfBounds))
                 {
@@ -439,7 +462,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
         // Loop balls look for collisions
         uint ball_bit = 0x1U;
 
+#if EIJIS_MANY_BALLS
+        for (int i = 1; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = 1; i < 16; i++)
+#endif
         {
             ball_bit <<= 1;
 
@@ -494,7 +521,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
 
         // check for collisions. a non-moving ball might be collided by a moving one
         uint ball_bit = 0x1U << id;
+#if EIJIS_MANY_BALLS
+        for (int i = id + 1; i < BilliardsModule.MAX_BALLS; i++)
+#else
         for (int i = id + 1; i < 16; i++)
+#endif
         {
             ball_bit <<= 1;
 
@@ -532,7 +563,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
                 {
                     g_ball_current.GetComponent<AudioSource>().PlayOneShot(hitSounds[id % 3], Mathf.Clamp01(dot));
                 }
+#if EIJIS_SNOOKER15REDS
+                if (table.isSnooker)
+#else
                 if (table_.isSnooker6Red)
+#endif
                 {
                     if (!cueBallHasCollided && id == 0 && balls_P[0].y > 0)
                     {
@@ -717,7 +752,11 @@ public class StandardPhysicsManager : UdonSharpBehaviour
 
     private bool isCueBallTouching()
     {
+#if EIJIS_SNOOKER15REDS
+        if (table.is8Ball)
+#else
         if (table.is8Ball || table.isSnooker6Red)
+#endif
         {
             // Check all
             for (int i = 1; i < 16; i++)
@@ -739,6 +778,25 @@ public class StandardPhysicsManager : UdonSharpBehaviour
                 }
             }
         }
+#if EIJIS_SNOOKER15REDS
+        else if (table.isSnooker)
+        {
+            for (int i = 1; i < 16; i++)
+            {
+                if ((balls_P[0] - balls_P[i]).sqrMagnitude < k_BALL_DSQR)
+                {
+                    return true;
+                }
+            }
+            for (int i = 25; i < 31; i++)
+            {
+                if ((balls_P[0] - balls_P[i]).sqrMagnitude < k_BALL_DSQR)
+                {
+                    return true;
+                }
+            }
+        }
+#endif
         else // 4
         {
             if ((balls_P[0] - balls_P[9]).sqrMagnitude < k_BALL_DSQR)
